@@ -13,7 +13,8 @@ cd docker-entrypoint-init.d
 
 # CD out of the folder, and acces mysql
 cd ..
-mysql -proot # attach the password, which is root
+ mysql -uroot -proot  # Log into MySQL as root user with the root password
+# attach the password, which is root
 
 # Now we are using mysql database, so we can check the databaes, tables etc..
 # Let's show all databases available
@@ -27,6 +28,9 @@ show tables;
 
 # Query the table (should see some data)
 select * from quotes;
+
+troubleshoot
+mysql -uroot -proot quotesdb < /docker-entrypoint-initdb.d/init.sql
 
 
 

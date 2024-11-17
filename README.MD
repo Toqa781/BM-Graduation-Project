@@ -8,7 +8,7 @@ application; namely:
 
 1. `API` Layer
 2. `Frontend` Layer
-3. `Database - MySQL` Layer
+3. `Database - sql` Layer
 
 We then use Docker Compose to run all of the containers at once.
 

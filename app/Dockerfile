@@ -1,13 +1,27 @@
+# Use a lightweight Python base image
 FROM python:3.11-slim
 
+# Set the working directory inside the container
 WORKDIR /app
 
-COPY . /app
+# Install system dependencies required for Python packages (optional if required)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libssl-dev \
+    libsasl2-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN pip install -r requirements.txt
+# Copy only the requirements file first to leverage Docker's cache
+COPY requirements.txt .
 
-EXPOSE 5002 
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# 5002 this is for local dev
+# Copy the rest of the application code
+COPY . .
 
+# Expose the Flask app's port (5002 for local dev and Docker Compose setups)
+EXPOSE 5002
+
+# Default command to run the Flask application
 CMD ["python", "app.py"]

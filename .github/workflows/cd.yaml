@@ -1,0 +1,48 @@
+name: Deploy the application
+on:
+  workflow_dispatch:
+  # workflow_run:
+  #   workflow: ["Terraform"]
+  #   type:
+  #     - completed
+  
+jobs:
+  cd:
+    name: deploy to eks
+    runs-on : ubuntu-latest
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v5
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4.3.1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.REGION }}
+
+      - name: update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ secrets.CLUSTER_NAME }} --region ${{ vars.REGION }}
+
+      - name: Trigger app deployment
+        uses: statsig-io/kubectl-via-eksctl@main
+        env:
+          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          region: ${{ vars.REGION }}
+          cluster: ${{ secrets.CLUSTER_NAME }}
+
+      - name: Deploy k8s deployments
+        # Apply secrets and configmap first
+        run: |
+          kubectl apply -f ./k8s/database-secrets.yaml
+          kubectl apply -f ./k8s/database-init-configmap.yaml
+          kubectl apply -f ./k8s
+
+      - name: Verify deployment
+        run: |
+          kubectl get pods
+          kubectl get svc
+          
+    

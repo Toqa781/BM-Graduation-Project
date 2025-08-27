@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: database-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: database
+  template:
+    metadata:
+      labels:
+        app: database
+    spec:
+      containers:
+      - name: database
+        image: yoyox2003/bm-grad-db:latest
+        ports:
+        - containerPort: 3306
+        env:
+        - name: MYSQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: MYSQL_DATABASE
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: MYSQL_ROOT_PASSWORD
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: MYSQL_USER
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: MYSQL_PASSWORD
+        volumeMounts:
+        - name: mysql-data
+          mountPath: /var/lib/mysql
+        - name: init-script
+          mountPath: /docker-entrypoint-initdb.d/
+      volumes:
+      - name: mysql-data
+        emptyDir: {}
+      - name: init-script
+        configMap:
+          name: database-init-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: database-service
+spec:
+  type: ClusterIP
+  selector:
+    app: database
+  ports:
+  - port: 3306
+    targetPort: 3306

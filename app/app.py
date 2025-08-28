@@ -76,6 +76,9 @@ def index():
         #     "http://bonni-test-env.eba-h7hph2uq.us-west-2.elasticbeanstalk.com/api/quotes"
         # ).json()
         # return render_template("index.html", quotes=quotes)
+@app.route("/health", methods=["GET"])
+def health():
+    return "OK", 200
 
 
 # new

@@ -1,62 +1,81 @@
-resource "aws_vpc" "the_vpc" {
-  cidr_block = var.vpc_cidr
-
-  tags = {
-    Name = "the_vpc"
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
   }
 }
 
-resource "aws_subnet" "the_subnet" {
-  count = 2
-  vpc_id                  = aws_vpc.the_vpc.id
-  cidr_block              = cidrsubnet(aws_vpc.the_vpc.cidr_block, 8, count.index)
-  availability_zone       = element(["us-east-1a", "us-east-1b"], count.index)
+provider "aws" {
+  region = var.region
+}
+
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags = {
+    Name = "${var.cluster_name}-vpc"
+  }
+}
+
+resource "aws_subnet" "public_1" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, 1)
+  availability_zone       = data.aws_availability_zones.available.names[0]
   map_public_ip_on_launch = true
-
   tags = {
-    Name = "the_subnet-${count.index}"
+    Name = "${var.cluster_name}-public-1"
   }
 }
 
-
-resource "aws_internet_gateway" "stage_igw" {
-  vpc_id = aws_vpc.the_vpc.id
-
+resource "aws_subnet" "public_2" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, 2)
+  availability_zone       = data.aws_availability_zones.available.names[1]
+  map_public_ip_on_launch = true
   tags = {
-    Name = "stage_igw"
+    Name = "${var.cluster_name}-public-2"
   }
 }
 
-resource "aws_route_table" "stage_route" {
-  vpc_id = aws_vpc.the_vpc.id
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id
+  tags = {
+    Name = "${var.cluster_name}-igw"
+  }
+}
 
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.stage_igw.id
+    gateway_id = aws_internet_gateway.igw.id
   }
-
   tags = {
-    Name = "stage_route"
+    Name = "${var.cluster_name}-public-rt"
   }
 }
 
-
-
-resource "aws_route_table_association" "public_subnet_association" {
-  count          = 2
-  subnet_id      = aws_subnet.the_subnet[count.index].id
-  route_table_id = aws_route_table.stage_route.id
+resource "aws_route_table_association" "public_1" {
+  subnet_id      = aws_subnet.public_1.id
+  route_table_id = aws_route_table.public.id
 }
 
+resource "aws_route_table_association" "public_2" {
+  subnet_id      = aws_subnet.public_2.id
+  route_table_id = aws_route_table.public.id
+}
 
-
-resource "aws_security_group" "eks_sg" {
-  name        = "stage_sg"
+resource "aws_security_group" "eks" {
+  name        = "${var.cluster_name}-sg"
   description = "Security group for EKS cluster"
-  vpc_id = aws_vpc.the_vpc.id
+  vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port   = 0
+    from_port   = 5000
     to_port     = 5000
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
@@ -66,7 +85,7 @@ resource "aws_security_group" "eks_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
@@ -78,118 +97,95 @@ resource "aws_security_group" "eks_sg" {
 
   egress {
     from_port   = 0
-    to_port     = 65535
-    protocol    = "tcp"
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.cluster_name}-sg"
   }
 }
 
-resource "aws_key_pair" "ssh_key" {
-  key_name   = "eks_ssh_keynew"
-  public_key = file(var.public_key_path) 
-}
-
-resource "aws_iam_role" "eks_worker_node_role" {
-  name = "stage-eks-worker-node-role"
-
+resource "aws_iam_role" "eks_cluster_role" {
+  name = "${var.cluster_name}-eks-cluster-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Action    = "sts:AssumeRole"
-        Effect    = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = {
+        Service = "eks.amazonaws.com"
       }
-    ]
+    }]
   })
 }
 
-resource "aws_iam_role_policy_attachment" "worker_node_policy" {
-  role       = aws_iam_role.eks_worker_node_role.name
+resource "aws_iam_role_policy_attachment" "eks_cluster_AmazonEKSClusterPolicy" {
+  role       = aws_iam_role.eks_cluster_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+}
+
+resource "aws_iam_role" "eks_node_role" {
+  name = "${var.cluster_name}-eks-node-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "eks_node_AmazonEKSWorkerNodePolicy" {
+  role       = aws_iam_role.eks_node_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
 }
 
-resource "aws_iam_role_policy_attachment" "worker_cni_policy" {
-  role       = aws_iam_role.eks_worker_node_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-}
-
-resource "aws_iam_role_policy_attachment" "ec2_read_only_policy" {
-  role       = aws_iam_role.eks_worker_node_role.name
+resource "aws_iam_role_policy_attachment" "eks_node_AmazonEC2ContainerRegistryReadOnly" {
+  role       = aws_iam_role.eks_node_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-resource "aws_iam_role_policy_attachment" "ec2_full_access_policy" {
-  role       = aws_iam_role.eks_worker_node_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"  
+resource "aws_iam_role_policy_attachment" "eks_node_AmazonEKS_CNI_Policy" {
+  role       = aws_iam_role.eks_node_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
 }
 
-resource "aws_iam_role" "eks_cluster_role" {
-  name = "stage-eks-cluster-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action    = "sts:AssumeRole"
-        Effect    = "Allow"
-        Principal = {
-          Service = "eks.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_eks_cluster" "stage_eks" {
+resource "aws_eks_cluster" "this" {
   name     = var.cluster_name
   role_arn = aws_iam_role.eks_cluster_role.arn
 
   vpc_config {
-    subnet_ids = aws_subnet.stage_subnet[*].id
-    security_group_ids = [aws_security_group.eks_sg.id]
+    subnet_ids         = [aws_subnet.public_1.id, aws_subnet.public_2.id]
+    security_group_ids = [aws_security_group.eks.id]
   }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.eks_cluster_AmazonEKSClusterPolicy
+  ]
 }
 
-resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
-  role       = aws_iam_role.eks_cluster_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-
-}
-
-resource "aws_iam_role_policy_attachment" "eks_service_policy" {
-  role       = aws_iam_role.eks_cluster_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSServicePolicy"
-}
-
-resource "aws_eks_node_group" "stage_eks_node_group" {
-  cluster_name    = aws_eks_cluster.stage_eks.name
-  node_group_name = "stage-eks-node-group"
-  node_role_arn   = aws_iam_role.eks_worker_node_role.arn
-  subnet_ids      = aws_subnet.the_subnet[*].id
+resource "aws_eks_node_group" "this" {
+  cluster_name    = aws_eks_cluster.this.name
+  node_group_name = "${var.cluster_name}-node-group"
+  node_role_arn   = aws_iam_role.eks_node_role.arn
+  subnet_ids      = [aws_subnet.public_1.id, aws_subnet.public_2.id]
 
   scaling_config {
     desired_size = var.node_desired_capacity
-    max_size     = var.node_max_capacity
-    min_size     = var.node_min_capacity
+    max_size     = var.node_desired_capacity + 1
+    min_size     = 1
   }
 
-  instance_types = ["t3.micro"] 
-
-  remote_access {
-    ec2_ssh_key = aws_key_pair.ssh_key.key_name
-    source_security_group_ids = [aws_security_group.eks_sg.id]
-  }
-
+  depends_on = [
+    aws_iam_role_policy_attachment.eks_node_AmazonEKSWorkerNodePolicy,
+    aws_iam_role_policy_attachment.eks_node_AmazonEC2ContainerRegistryReadOnly,
+    aws_iam_role_policy_attachment.eks_node_AmazonEKS_CNI_Policy
+  ]
 }
 
-
-data "aws_eks_cluster" "stage_eks" {
-  name = aws_eks_cluster.stage_eks.name
-}
-
-data "aws_eks_cluster_auth" "stage_eks" {
-  name = aws_eks_cluster.stage_eks.name
-}
+data "aws_availability_zones" "available" {}

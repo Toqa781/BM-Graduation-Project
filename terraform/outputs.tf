@@ -1,55 +1,40 @@
+output "vpc_id" {
+  value = module.vpc.vpc_id
+}
+
+output "public_subnets" {
+  value = module.vpc.public_subnets
+}
+
+output "private_subnets" {
+  value = module.vpc.private_subnets
+}
+
 output "eks_cluster_name" {
-  description = "Name of the EKS cluster"
-  value       = aws_eks_cluster.stage_eks.name
+  value = module.eks.cluster_name
 }
 
 output "eks_cluster_endpoint" {
-  description = "Endpoint for EKS control plane"
-  value       = aws_eks_cluster.stage_eks.endpoint
+  value = module.eks.cluster_endpoint
 }
 
-output "eks_cluster_version" {
-  description = "The Kubernetes version for the EKS cluster"
-  value       = aws_eks_cluster.stage_eks.version
+output "eks_cluster_certificate_authority_data" {
+  value     = module.eks.cluster_certificate_authority_data
+  sensitive = true
 }
 
-output "vpc_id" {
-  description = "ID of the VPC"
-  value       = aws_vpc.the_vpc.id
+output "node_group_role_arn" {
+  value = module.eks.eks_managed_node_groups["default"].iam_role_arn
 }
 
-output "cluster_id" {
-  description = "The name/id of the EKS cluster"
-  value       = aws_eks_cluster.stage_eks.id
+output "rds_endpoint" {
+  value = aws_db_instance.this.address
 }
 
-output "node_group_id" {
-  description = "EKS node group ID"
-  value       = aws_eks_node_group.stage_eks_node_group.id
+output "rds_port" {
+  value = aws_db_instance.this.port
 }
 
-output "subnet_ids" {
-  description = "List of IDs of the subnets"
-  value       = aws_subnet.the_subnet[*].id
-}
-
-output "cluster_token" {
-  description = "Token for the EKS cluster"
-  value       = data.aws_eks_cluster_auth.stage_eks.token
-  sensitive   = true
-}
-
-output "cluster_ca_certificate" {
-  description = "Base64 encoded certificate data required to communicate with the cluster"
-  value       = aws_eks_cluster.stage_eks.certificate_authority[0].data
-}
-
-output "cluster_security_group_id" {
-  description = "Security group ID attached to the EKS cluster"
-  value       = aws_security_group.eks_sg.id
-}
-
-output "region" {
-  description = "AWS region"
-  value       = var.region
+output "rds_db_name" {
+  value = aws_db_instance.this.db_name
 }

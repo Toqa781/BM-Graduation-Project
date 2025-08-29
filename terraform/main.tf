@@ -1,79 +1,137 @@
-#################################
+provider "aws" {
+  region = var.region
+}
+
+# --------------------
 # VPC
-#################################
-resource "aws_vpc" "the_vpc" {
-  cidr_block           = var.vpc_cidr
-  enable_dns_hostnames = true
-  enable_dns_support   = true
+# --------------------
+resource "aws_vpc" "main" {
+  cidr_block = var.vpc_cidr
 
   tags = {
-    Name        = "eks-vpc"
-    Environment = var.env
+    Name = "three-tier-vpc"
   }
 }
 
-resource "aws_subnet" "the_subnet" {
-  count             = 3 # High availability across 3 AZs
-  vpc_id            = aws_vpc.the_vpc.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index)
-  availability_zone = element(data.aws_availability_zones.available.names, count.index)
+# --------------------
+# Subnets
+# --------------------
+resource "aws_subnet" "public_subnets" {
+  count                   = length(var.public_subnet_cidrs)
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.public_subnet_cidrs[count.index]
+  availability_zone       = element(var.azs, count.index)
+  map_public_ip_on_launch = true
 
   tags = {
-    Name        = "eks-subnet-${count.index}"
-    Environment = var.env
+    Name = "public-subnet-${count.index}"
   }
 }
 
-resource "aws_internet_gateway" "the_gw" {
-  vpc_id = aws_vpc.the_vpc.id
+resource "aws_subnet" "private_subnets" {
+  count                   = length(var.private_subnet_cidrs)
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.private_subnet_cidrs[count.index]
+  availability_zone       = element(var.azs, count.index)
+
+  tags = {
+    Name = "private-subnet-${count.index}"
+  }
 }
 
-resource "aws_route_table" "the_routing_table" {
-  vpc_id = aws_vpc.the_vpc.id
+# --------------------
+# Internet Gateway
+# --------------------
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "three-tier-igw"
+  }
+}
+
+# --------------------
+# NAT Gateway + EIP
+# --------------------
+resource "aws_eip" "nat_eip" {
+  count = length(var.public_subnet_cidrs)
+  vpc   = true
+}
+
+resource "aws_nat_gateway" "nat_gw" {
+  count         = length(var.public_subnet_cidrs)
+  allocation_id = aws_eip.nat_eip[count.index].id
+  subnet_id     = aws_subnet.public_subnets[count.index].id
+
+  tags = {
+    Name = "nat-gw-${count.index}"
+  }
+}
+
+# --------------------
+# Route Tables
+# --------------------
+resource "aws_route_table" "public_rt" {
+  vpc_id = aws_vpc.main.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.the_gw.id
+    gateway_id = aws_internet_gateway.gw.id
+  }
+
+  tags = {
+    Name = "public-rt"
   }
 }
 
-resource "aws_route_table_association" "the_association" {
-  count          = 3
-  subnet_id      = aws_subnet.the_subnet[count.index].id
-  route_table_id = aws_route_table.the_routing_table.id
+resource "aws_route_table_association" "public_assoc" {
+  count          = length(aws_subnet.public_subnets)
+  subnet_id      = aws_subnet.public_subnets[count.index].id
+  route_table_id = aws_route_table.public_rt.id
 }
 
-#################################
-# Security Group
-#################################
-resource "aws_security_group" "allow_tls" {
-  name   = "allow_tls"
-  vpc_id = aws_vpc.the_vpc.id
+resource "aws_route_table" "private_rt" {
+  vpc_id = aws_vpc.main.id
 
-  # Limit SSH to your IP
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.my_ip] # safer than 0.0.0.0/0
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = element(aws_nat_gateway.nat_gw[*].id, 0)
   }
 
-  # Allow HTTP/HTTPS
+  tags = {
+    Name = "private-rt"
+  }
+}
+
+resource "aws_route_table_association" "private_assoc" {
+  count          = length(aws_subnet.private_subnets)
+  subnet_id      = aws_subnet.private_subnets[count.index].id
+  route_table_id = aws_route_table.private_rt.id
+}
+
+# --------------------
+# Security Groups
+# --------------------
+resource "aws_security_group" "eks_sg" {
+  vpc_id = aws_vpc.main.id
+  name   = "eks-sg"
+
   ingress {
+    description = "Allow all internal traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  ingress {
+    description = "Allow external HTTP"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Worker-to-worker communication
   egress {
     from_port   = 0
     to_port     = 0
@@ -82,91 +140,89 @@ resource "aws_security_group" "allow_tls" {
   }
 }
 
-#################################
-# EKS Cluster IAM Role
-#################################
-resource "aws_iam_role" "eks_cluster_role" {
-  name = "eks_cluster_role"
+resource "aws_security_group" "rds_sg" {
+  vpc_id = aws_vpc.main.id
+  name   = "rds-sg"
 
-  assume_role_policy = data.aws_iam_policy_document.eks_assume_role.json
-}
+  ingress {
+    description     = "Allow PostgreSQL from EKS"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.eks_sg.id]
+  }
 
-data "aws_iam_policy_document" "eks_assume_role" {
-  statement {
-    actions = ["sts:AssumeRole"]
-
-    principals {
-      type        = "Service"
-      identifiers = ["eks.amazonaws.com"]
-    }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 }
 
-resource "aws_iam_role_policy_attachment" "eks_cluster_AmazonEKSClusterPolicy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-  role       = aws_iam_role.eks_cluster_role.name
-}
-
-#################################
+# --------------------
 # EKS Cluster
-#################################
-resource "aws_eks_cluster" "stage_eks" {
-  name     = var.cluster_name
-  role_arn = aws_iam_role.eks_cluster_role.arn
-  version  = var.cluster_version
+# --------------------
+resource "aws_eks_cluster" "main" {
+  name     = "three-tier-cluster"
+  role_arn = var.eks_role_arn
 
   vpc_config {
-    subnet_ids         = aws_subnet.the_subnet[*].id
-    security_group_ids = [aws_security_group.allow_tls.id]
+    subnet_ids         = aws_subnet.private_subnets[*].id
+    security_group_ids = [aws_security_group.eks_sg.id]
   }
 
-  depends_on = [aws_iam_role_policy_attachment.eks_cluster_AmazonEKSClusterPolicy]
+  depends_on = [aws_vpc.main]
 }
 
-#################################
-# Node Group
-#################################
-resource "aws_iam_role" "nodes_general" {
-  name = "eks-node-group-nodes-general"
-
-  assume_role_policy = data.aws_iam_policy_document.nodes_assume_role.json
-}
-
-data "aws_iam_policy_document" "nodes_assume_role" {
-  statement {
-    actions = ["sts:AssumeRole"]
-
-    principals {
-      type        = "Service"
-      identifiers = ["ec2.amazonaws.com"]
-    }
-  }
-}
-
-resource "aws_iam_role_policy_attachment" "nodes_general_policies" {
-  for_each = toset([
-    "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
-    "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
-    "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
-    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy" # added logging
-  ])
-  role       = aws_iam_role.nodes_general.name
-  policy_arn = each.value
-}
-
-resource "aws_eks_node_group" "nodes_general" {
-  cluster_name    = aws_eks_cluster.stage_eks.name
-  node_group_name = "nodes-general"
-  node_role_arn   = aws_iam_role.nodes_general.arn
-  subnet_ids      = aws_subnet.the_subnet[*].id
-  instance_types  = [var.node_instance_type]
-  disk_size       = 20
+resource "aws_eks_node_group" "private_ng" {
+  cluster_name    = aws_eks_cluster.main.name
+  node_group_name = "private-nodes"
+  node_role_arn   = var.eks_node_role_arn
+  subnet_ids      = aws_subnet.private_subnets[*].id
+  instance_types  = ["t3.medium"]
 
   scaling_config {
     desired_size = 2
     max_size     = 3
     min_size     = 1
   }
+}
 
-  depends_on = [aws_iam_role_policy_attachment.nodes_general_policies]
+# --------------------
+# RDS (PostgreSQL)
+# --------------------
+resource "aws_db_subnet_group" "db_subnet_group" {
+  name       = "db-subnet-group"
+  subnet_ids = aws_subnet.private_subnets[*].id
+}
+
+resource "aws_db_instance" "postgres" {
+  identifier             = "three-tier-db"
+  allocated_storage      = 20
+  engine                 = "postgres"
+  engine_version         = "15.2"
+  instance_class         = "db.t3.micro"
+  username               = var.db_username
+  password               = var.db_password
+  db_subnet_group_name   = aws_db_subnet_group.db_subnet_group.name
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]
+  skip_final_snapshot    = true
+}
+
+# --------------------
+# Secrets Manager
+# --------------------
+resource "aws_secretsmanager_secret" "db_secret" {
+  name = "db-credentials"
+}
+
+resource "aws_secretsmanager_secret_version" "db_secret_version" {
+  secret_id     = aws_secretsmanager_secret.db_secret.id
+  secret_string = jsonencode({
+    username = var.db_username,
+    password = var.db_password,
+    host     = aws_db_instance.postgres.address,
+    port     = aws_db_instance.postgres.port
+  })
 }

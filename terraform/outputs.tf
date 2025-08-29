@@ -19,13 +19,13 @@ output "vpc_id" {
 }
 
 output "cluster_id" {
-  description = "The ID of the EKS cluster"
+  description = "The name/id of the EKS cluster"
   value       = aws_eks_cluster.stage_eks.id
 }
 
 output "node_group_id" {
   description = "EKS node group ID"
-  value       = aws_eks_node_group.nodes_general.id
+  value       = aws_eks_node_group.stage_eks_node_group.id
 }
 
 output "subnet_ids" {
@@ -33,13 +33,23 @@ output "subnet_ids" {
   value       = aws_subnet.the_subnet[*].id
 }
 
+output "cluster_token" {
+  description = "Token for the EKS cluster"
+  value       = data.aws_eks_cluster_auth.stage_eks.token
+  sensitive   = true
+}
+
+output "cluster_ca_certificate" {
+  description = "Base64 encoded certificate data required to communicate with the cluster"
+  value       = aws_eks_cluster.stage_eks.certificate_authority[0].data
+}
+
 output "cluster_security_group_id" {
   description = "Security group ID attached to the EKS cluster"
-  value       = aws_security_group.allow_tls.id
+  value       = aws_security_group.eks_sg.id
 }
 
 output "region" {
   description = "AWS region"
   value       = var.region
 }
-

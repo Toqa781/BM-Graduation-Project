@@ -26,9 +26,12 @@ provider "kubernetes" {
 }
 
 data "aws_eks_cluster" "this" {
-  name = module.eks.cluster_name
+  depends_on = [module.eks]  
+  name       = module.eks.cluster_id
 }
 
 data "aws_eks_cluster_auth" "this" {
-  name = module.eks.cluster_name
+  depends_on = [module.eks]
+  name       = module.eks.cluster_id
 }
+

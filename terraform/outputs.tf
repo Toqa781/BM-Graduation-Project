@@ -27,14 +27,4 @@ output "node_group_role_arn" {
   value = module.eks.eks_managed_node_groups["default"].iam_role_arn
 }
 
-output "rds_endpoint" {
-  value = aws_db_instance.this.address
-}
 
-output "rds_port" {
-  value = aws_db_instance.this.port
-}
-
-output "rds_db_name" {
-  value = aws_db_instance.this.db_name
-}

@@ -1,125 +1,128 @@
-# Configure the AWS Provider
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-  required_version = ">= 1.0"
-}
+########################
+# Networking (VPC)    #
+########################
 
-provider "aws" {
-  region = var.region
-}
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "5.8.1"
 
-# VPC Configuration
-resource "aws_vpc" "the_vpc" {
-  cidr_block           = var.vpc_cidr
+  name = "${var.cluster_name}-vpc"
+  cidr = var.vpc_cidr
+
+  azs             = length(var.azs) > 0 ? var.azs : slice(data.aws_availability_zones.available.names, 0, 2)
+  public_subnets  = [for i in range(2) : cidrsubnet(var.vpc_cidr, 8, i)]
+  private_subnets = [for i in range(2, 4) : cidrsubnet(var.vpc_cidr, 8, i)]
+
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
-  tags = {
-    Name = "the_vpc"
-    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
-  }
-}
 
-# Public Subnets
-resource "aws_subnet" "the_subnet" {
-  count = 2
-  
-  vpc_id                  = aws_vpc.the_vpc.id
-  cidr_block              = cidrsubnet(aws_vpc.the_vpc.cidr_block, 8, count.index)
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
-  map_public_ip_on_launch = true
-  
-  tags = {
-    Name = "the_subnet-${count.index}"
-    Type = "Public"
-    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+  enable_nat_gateway   = true
+  single_nat_gateway   = true
+
+  public_subnet_tags = {
     "kubernetes.io/role/elb" = "1"
   }
+
+  private_subnet_tags = {
+    "kubernetes.io/role/internal-elb" = "1"
+  }
+
+  tags = {
+    Project = var.cluster_name
+  }
 }
 
-# Data source for availability zones
 data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# Internet Gateway
-resource "aws_internet_gateway" "stage_igw" {
-  vpc_id = aws_vpc.the_vpc.id
-  
+########################
+# SSH Key (optional)   #
+########################
+
+resource "aws_key_pair" "this" {
+  count      = var.create_key_pair ? 1 : 0
+  key_name   = "${var.cluster_name}-key"
+  public_key = file(var.public_key_path)
+}
+
+########################
+# EKS Cluster          #
+########################
+
+module "eks" {
+  source  = "terraform-aws-modules/eks/aws"
+  version = "20.24.3"
+
+  cluster_name    = var.cluster_name
+  cluster_version = var.kubernetes_version
+
+  cluster_endpoint_public_access = true
+
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = module.vpc.private_subnets
+
+  eks_managed_node_groups = {
+    default = {
+      min_size     = var.node_min_capacity
+      max_size     = var.node_max_capacity
+      desired_size = var.node_desired_capacity
+
+      instance_types = var.node_instance_types
+      capacity_type  = "ON_DEMAND"
+
+      remote_access = var.create_key_pair ? {
+        ec2_ssh_key               = aws_key_pair.this[0].key_name
+        source_security_group_ids = [aws_security_group.node_ssh_sg.id]
+      } : null
+    }
+  }
+
   tags = {
-    Name = "stage_igw"
+    Project = var.cluster_name
   }
 }
 
-# Route Table
-resource "aws_route_table" "stage_route" {
-  vpc_id = aws_vpc.the_vpc.id
-  
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.stage_igw.id
-  }
-  
-  tags = {
-    Name = "stage_route"
-  }
-}
+# Security group to allow SSH to nodes if remote access is enabled
+resource "aws_security_group" "node_ssh_sg" {
+  name        = "${var.cluster_name}-node-ssh"
+  description = "Allow SSH access to EKS nodes (optional)"
+  vpc_id      = module.vpc.vpc_id
 
-# Route Table Association
-resource "aws_route_table_association" "public_subnet_association" {
-  count          = 2
-  subnet_id      = aws_subnet.the_subnet[count.index].id
-  route_table_id = aws_route_table.stage_route.id
-}
-
-# Security Group for EKS
-resource "aws_security_group" "eks_sg" {
-  name        = "stage_sg"
-  description = "Security group for EKS cluster"
-  vpc_id      = aws_vpc.the_vpc.id
-
-  # Allow application traffic
-  ingress {
-    description = "Application port"
-    from_port   = 5000
-    to_port     = 5000
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Allow SSH access
   ingress {
     description = "SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  
-  }
-
-  # Allow HTTPS
-  ingress {
-    description = "HTTPS"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Allow HTTP
-  ingress {
-    description = "HTTP"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+}
 
-  # Allow all outbound traffic
+########################
+# RDS (PostgreSQL)     #
+########################
+
+# Security group for RDS to allow access from within VPC (e.g., from services in private subnets)
+resource "aws_security_group" "rds_sg" {
+  name        = "${var.cluster_name}-rds-sg"
+  description = "Allow access to RDS from private subnets"
+  vpc_id      = module.vpc.vpc_id
+
+  ingress {
+    from_port       = var.db_port
+    to_port         = var.db_port
+    protocol        = "tcp"
+    cidr_blocks     = module.vpc.private_subnets_cidr_blocks
+    ipv6_cidr_blocks = []
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -128,150 +131,42 @@ resource "aws_security_group" "eks_sg" {
   }
 
   tags = {
-    Name = "eks-security-group"
+    Project = var.cluster_name
   }
 }
 
-# SSH Key Pair
-resource "aws_key_pair" "ssh_key" {
-  key_name   = "eks_ssh_keynew"
-  public_key = file(var.public_key_path)
-}
-
-# IAM Role for EKS Worker Nodes
-resource "aws_iam_role" "eks_worker_node_role" {
-  name = "stage-eks-worker-node-role"
-  
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-      }
-    ]
-  })
+resource "aws_db_subnet_group" "this" {
+  name       = "${var.cluster_name}-db-subnets"
+  subnet_ids = module.vpc.private_subnets
 
   tags = {
-    Name = "eks-worker-node-role"
+    Project = var.cluster_name
   }
 }
 
-# IAM Policy Attachments for Worker Nodes
-resource "aws_iam_role_policy_attachment" "worker_node_policy" {
-  role       = aws_iam_role.eks_worker_node_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-}
+resource "aws_db_instance" "this" {
+  identifier             = "${var.cluster_name}-db"
+  engine                 = var.db_engine
+  engine_version         = var.db_engine_version
+  instance_class         = var.db_instance_class
+  allocated_storage      = 20
+  max_allocated_storage  = 100
+  db_name                = var.db_name
+  username               = var.db_master_username
+  password               = var.db_master_password
+  port                   = var.db_port
 
-resource "aws_iam_role_policy_attachment" "worker_cni_policy" {
-  role       = aws_iam_role.eks_worker_node_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-}
+  db_subnet_group_name   = aws_db_subnet_group.this.name
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]
 
-resource "aws_iam_role_policy_attachment" "ec2_read_only_policy" {
-  role       = aws_iam_role.eks_worker_node_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-}
+  multi_az               = false
+  publicly_accessible    = false
+  storage_encrypted      = true
+  skip_final_snapshot    = true
 
-# IAM Role for EKS Cluster
-resource "aws_iam_role" "eks_cluster_role" {
-  name = "stage-eks-cluster-role"
-  
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "eks.amazonaws.com"
-        }
-      }
-    ]
-  })
+  deletion_protection    = false
 
   tags = {
-    Name = "eks-cluster-role"
+    Project = var.cluster_name
   }
-}
-
-# IAM Policy Attachments for EKS Cluster
-resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
-  role       = aws_iam_role.eks_cluster_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-}
-
-# EKS Cluster
-resource "aws_eks_cluster" "stage_eks" {
-  name     = var.cluster_name
-  role_arn = aws_iam_role.eks_cluster_role.arn
-  version  = "1.27"
-
-  vpc_config {
-    subnet_ids              = aws_subnet.the_subnet[*].id
-    security_group_ids      = [aws_security_group.eks_sg.id]
-    endpoint_private_access = false
-    endpoint_public_access  = true
-    public_access_cidrs     = ["0.0.0.0/0"]
-  }
-
-  # Ensure proper ordering of resource creation
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_cluster_policy
-  ]
-
-  tags = {
-    Name = var.cluster_name
-  }
-}
-
-# EKS Node Group
-resource "aws_eks_node_group" "stage_eks_node_group" {
-  cluster_name    = aws_eks_cluster.stage_eks.name
-  node_group_name = "stage-eks-node-group"
-  node_role_arn   = aws_iam_role.eks_worker_node_role.arn
-  subnet_ids      = aws_subnet.the_subnet[*].id
-
-  scaling_config {
-    desired_size = var.node_desired_capacity
-    max_size     = var.node_max_capacity
-    min_size     = var.node_min_capacity
-  }
-
-  update_config {
-    max_unavailable = 1
-  }
-
-  # Use the latest EKS optimized AMI
-  ami_type       = "AL2_x86_64"
-  capacity_type  = "ON_DEMAND"
-  instance_types = [var.node_instance_type]
-
-  remote_access {
-    ec2_ssh_key               = aws_key_pair.ssh_key.key_name
-    source_security_group_ids = [aws_security_group.eks_sg.id]
-  }
-
-  # Ensure proper ordering of resource creation
-  depends_on = [
-    aws_iam_role_policy_attachment.worker_node_policy,
-    aws_iam_role_policy_attachment.worker_cni_policy,
-    aws_iam_role_policy_attachment.ec2_read_only_policy,
-  ]
-
-  tags = {
-    Name = "stage-eks-node-group"
-  }
-}
-
-# Data sources for cluster information
-data "aws_eks_cluster" "stage_eks" {
-  name = aws_eks_cluster.stage_eks.name
-}
-
-data "aws_eks_cluster_auth" "stage_eks" {
-  name = aws_eks_cluster.stage_eks.name
 }

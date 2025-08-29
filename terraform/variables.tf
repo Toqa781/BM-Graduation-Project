@@ -48,7 +48,7 @@ variable "node_max_capacity" {
 variable "node_instance_types" {
   description = "EC2 instance types for node group"
   type        = list(string)
-  default     = ["t3.medium"]
+  default     = ["t2.small"]
 }
 
 variable "create_key_pair" {
@@ -63,45 +63,3 @@ variable "public_key_path" {
   default     = "id_rsa.pub"
 }
 
-# Database variables (RDS)
-variable "db_engine" {
-  description = "Database engine (postgres or mysql)"
-  type        = string
-  default     = "postgres"
-}
-
-variable "db_engine_version" {
-  description = "Database engine version"
-  type        = string
-  default     = "16.3"
-}
-
-variable "db_instance_class" {
-  description = "RDS instance class"
-  type        = string
-  default     = "db.t3.micro"
-}
-
-variable "db_name" {
-  description = "Initial database name"
-  type        = string
-  default     = "appdb"
-}
-
-variable "db_master_username" {
-  description = "Master DB username"
-  type        = string
-  default     = "appadmin"
-}
-
-variable "db_master_password" {
-  description = "Master DB password (use Terraform Cloud/Cloud vars or a secrets manager in real projects)"
-  type        = string
-  sensitive   = true
-}
-
-variable "db_port" {
-  description = "DB port (5432 for Postgres, 3306 for MySQL)"
-  type        = number
-  default     = 5432
-}

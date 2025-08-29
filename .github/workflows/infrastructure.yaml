@@ -25,7 +25,7 @@ jobs:
               with:
                   aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
                   aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                  aws-region: ${{ vars.REGION }}
+                  aws-region: us-east-1
             
             - name: Setup Terraform
               uses: hashicorp/setup-terraform@v3.1.2
@@ -37,7 +37,7 @@ jobs:
               run: terraform validate
 
             - name: Terraform Plan
-              run: terraform plan -var="region=${{ vars.REGION }}" -out=tfplan
+              run: terraform plan -var="region=us-east-1" -out=tfplan
 
             - name: Upload plan artifact
               uses: actions/upload-artifact@v4
@@ -65,7 +65,7 @@ jobs:
               with:
                   aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
                   aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                  aws-region: ${{ vars.REGION }}    
+                  aws-region: us-east-1    
             
             - name: Setup Terraform
               uses: hashicorp/setup-terraform@v3.1.2  
@@ -103,7 +103,7 @@ jobs:
             with:
                 aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
                 aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                aws-region: ${{ vars.REGION }}
+                aws-region: us-east-1
 
           - name: Setup Terraform
             uses: hashicorp/setup-terraform@v3.1.2
@@ -118,7 +118,7 @@ jobs:
                 path: ./terraform/team-01
          
           - name: Terraform Plan Destroy
-            run: terraform plan -destroy -var="region=${{ vars.REGION }}" -out=tfplan
+            run: terraform plan -destroy -var="region=us-east-1" -out=tfplan
 
           - name: Terraform Apply Destroy
             run: terraform apply -auto-approve tfplan

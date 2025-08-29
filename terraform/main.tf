@@ -52,12 +52,10 @@ resource "aws_key_pair" "this" {
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "21.1.5"  # update to the latest available version
+  version = "21.1.5"
 
-  cluster_name    = var.cluster_name
-  cluster_version = var.kubernetes_version
-
-  cluster_endpoint_public_access = true
+  name               = var.cluster_name
+  kubernetes_version = var.kubernetes_version
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
@@ -82,6 +80,7 @@ module "eks" {
     Project = var.cluster_name
   }
 }
+
 
 
 # Security group to allow SSH to nodes if remote access is enabled

@@ -52,7 +52,7 @@ resource "aws_key_pair" "this" {
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "20.24.3"
+  version = "23.0"
 
   cluster_name    = var.cluster_name
   cluster_version = var.kubernetes_version

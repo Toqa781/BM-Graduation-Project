@@ -52,7 +52,7 @@ resource "aws_key_pair" "this" {
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "23.0"
+  version = "21.1.5"  # update to the latest available version
 
   cluster_name    = var.cluster_name
   cluster_version = var.kubernetes_version
@@ -82,6 +82,7 @@ module "eks" {
     Project = var.cluster_name
   }
 }
+
 
 # Security group to allow SSH to nodes if remote access is enabled
 resource "aws_security_group" "node_ssh_sg" {

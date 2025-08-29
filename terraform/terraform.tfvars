@@ -11,18 +11,9 @@ kubernetes_version   = "1.29"
 node_desired_capacity = 2
 node_min_capacity     = 1
 node_max_capacity     = 3
-node_instance_types   = ["t3.medium"]
+node_instance_types   = ["t2.small"]
 
 # Key pair
 create_key_pair  = true
 public_key_path  = "id_rsa.pub"
 
-# RDS
-db_engine           = "postgres"
-db_engine_version   = "16.3"
-db_instance_class   = "db.t3.micro"
-db_name             = "appdb"
-db_master_username  = "appadmin"
-# IMPORTANT: set this via -var or environment, not committed to VCS
-# db_master_password = "YOUR-STRONG-PASSWORD"
-db_port             = 5432

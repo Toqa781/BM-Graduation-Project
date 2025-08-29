@@ -1,6 +1,6 @@
 # Region and AZs
-region = "us-east-1"
-azs    = ["us-east-1a", "us-east-1b"]
+region = "us-west-2"
+azs    = ["us-west-2a", "us-west-2b"]
 
 # Networking
 vpc_cidr = "10.0.0.0/16"

@@ -1,6 +1,11 @@
 variable "region" {
   description = "AWS region to deploy resources in"
   type        = string
+  default     = "us-east-1"
+  validation {
+    condition     = length(var.region) > 0
+    error_message = "Region must not be empty."
+  }
 }
 
 variable "vpc_cidr" {
@@ -46,5 +51,5 @@ variable "node_min_capacity" {
 variable "public_key_path" {
   description = "Path to your public SSH key"
   type        = string
-  default     = "id_rsa.pub" # Relative path to the key file
+  default     = "~/.ssh/id_rsa.pub"
 }

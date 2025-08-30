@@ -2,9 +2,12 @@ name: Deploy the application
 on:
   workflow_dispatch:
   # workflow_run:
-  #   workflow: ["Terraform"]
-  #   type:
+  #   workflows: ["Infrastructure Provisioning"]
+  #   types:
   #     - completed
+  push:
+    branches:
+      - main
   
 jobs:
   cd:

@@ -1,10 +1,10 @@
 name: Deploy the application
 on:
   workflow_dispatch:
-  # workflow_run:
-  #   workflows: ["Infrastructure Provisioning"]
-  #   types:
-  #     - completed
+  workflow_run:
+    workflows: ["Test, Lint, Build and Push","Infrastructure Provisioning"]
+    types:
+      - completed
   push:
     branches:
       - main

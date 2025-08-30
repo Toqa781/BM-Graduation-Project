@@ -1,29 +1,31 @@
- output "vpc_id" {
-  value = module.vpc.vpc_id
-}
-
-output "public_subnets" {
-  value = module.vpc.public_subnets
-}
-
-output "private_subnets" {
-  value = module.vpc.private_subnets
-}
-
 output "eks_cluster_name" {
-  value = module.eks.cluster_name
+  value = aws_eks_cluster.stage_eks.name
 }
 
 output "eks_cluster_endpoint" {
-  value = module.eks.cluster_endpoint
+  value = aws_eks_cluster.stage_eks.endpoint
 }
 
-output "eks_cluster_certificate_authority_data" {
-  value     = module.eks.cluster_certificate_authority_data
+output "vpc_id" {
+  value = aws_vpc.stage_vpc.id
+}
+
+
+output "cluster_id" {
+  value = aws_eks_cluster.stage_eks.id
+}
+
+output "node_group_id" {
+  value = aws_eks_node_group.stage_eks_node_group.id
+}
+
+
+output "subnet_ids" {
+  value = aws_subnet.stage_subnet[*].id
+}
+
+
+output "cluster_token" {
+  value = data.aws_eks_cluster_auth.stage_eks.token
   sensitive = true
 }
-
-output "node_group_role_arn" {
-  value = module.eks.eks_managed_node_groups["default"].iam_role_arn
-}
-

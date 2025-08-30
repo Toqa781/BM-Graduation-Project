@@ -1,50 +1,47 @@
-variable "region" {
-  description = "AWS region to deploy resources in"
-  type        = string
-}
-
 variable "vpc_cidr" {
-  description = "CIDR block for the VPC"
-  type        = string
+    description = "vpc cidr"
+    type = string
+    default = "10.0.0.0/16"
+}
+variable "availability_zones" {
+  description = "availability zones"
+  type = list(string)
+  default = [ "eu-central-1a","eu-central-1b" ]
 }
 
-variable "private_subnets" {
-  description = "Private subnet CIDR blocks"
-  type        = list(string)
+variable "private_subnet_cidrs" {
+  description = "private_subnets_cidrs"
+  type = list(string)
+  default = [ "10.0.1.0/24","10.0.2.0/24" ]
 }
 
-variable "public_subnets" {
-  description = "Public subnet CIDR blocks"
-  type        = list(string)
+variable "public_subnet_cidrs" {
+  description = "public_subnets_cidrs"
+  type = list(string)
+  default = [ "10.0.3.0/24","10.0.4.0/24" ]
 }
 
 variable "cluster_name" {
-  description = "The name of the EKS cluster"
-  type        = string
+  description = "eks cluster name"
+  type = string
 }
 
-variable "node_instance_type" {
-  description = "The instance type for the EKS nodes"
-  type        = string
+variable "cluster_version" {
+  description   = "Kubernetes version"
+  type          = string
+
 }
 
-variable "node_desired_capacity" {
-  description = "The desired number of worker nodes"
-  type        = number
-}
 
-variable "node_max_capacity" {
-  description = "The maximum number of worker nodes"
-  type        = number
-}
-
-variable "node_min_capacity" {
-  description = "The minimum number of worker nodes"
-  type        = number
-}
-
-variable "public_key_path" {
-  description = "Path to your public SSH key"
-  type        = string
-  default     = "id_rsa.pub" # Relative path to the key file
+variable "node_groups" {
+  description = "EKS node groups configuration"
+  type = map(object({
+    instance_types = list(string)
+    capacity_type  = string
+    scaling_config = object({
+      desired_size = number
+      max_size     = number
+      min_size     = number 
+    })
+  }))
 }

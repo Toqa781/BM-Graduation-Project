@@ -5,9 +5,9 @@ on:
     workflows: ["Test, Lint, Build and Push","Infrastructure Provisioning"]
     types:
       - completed
-  push:
-    branches:
-      - main
+  # push:
+  #   branches:
+  #     - main
   
 jobs:
   cd:

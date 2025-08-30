@@ -38,6 +38,7 @@ jobs:
 
       - name: Helm tool installer
         uses: Azure/setup-helm@v4.3.1
+        
 
       - name: Deploy helm chart
         run: |

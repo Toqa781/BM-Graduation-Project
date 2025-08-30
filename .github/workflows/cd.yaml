@@ -36,12 +36,12 @@ jobs:
           region: ${{ vars.REGION }}
           cluster: ${{ secrets.CLUSTER_NAME }}
 
-      - name: Deploy k8s deployments
-        # Apply secrets and configmap first
+      - name: Helm tool installer
+        uses: Azure/setup-helm@v4.3.1
+
+      - name: Deploy helm chart
         run: |
-          kubectl apply -f ./k8s/database-secrets.yaml
-          kubectl apply -f ./k8s/database-init-configmap.yaml
-          kubectl apply -f ./k8s
+          helm upgrade --install bm-flask-app ./bm-chart
 
       - name: Verify deployment
         run: |

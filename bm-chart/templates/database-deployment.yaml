@@ -1,22 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: database-deployment
+  name: {{ .Values.database.name }}-deployment
 spec:
-  replicas: 2
+  replicas: {{ .Values.database.replicaCount }}
   selector:
     matchLabels:
-      app: database
+      app: {{ .Values.database.name }}
   template:
     metadata:
       labels:
-        app: database
+        app: {{ .Values.database.name }}
     spec:
       containers:
-      - name: database
-        image: yoyox2003/bm-grad-db:latest
+      - name: {{ .Values.database.name }}
+        image: {{ .Values.database.image }}
         ports:
-        - containerPort: 3306
+        - containerPort: {{ .Values.database.port }}
         env:
         - name: MYSQL_DATABASE
           valueFrom:
@@ -53,11 +53,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: database-service
+  name: {{ .Values.database.name }}-service
 spec:
-  type: ClusterIP
+  type: {{ .Values.database.serviceType }}
   selector:
-    app: database
+    app: {{ .Values.database.name }}
   ports:
-  - port: 3306
-    targetPort: 3306
+  - port: {{ .Values.database.port }}
+    targetPort: {{ .Values.database.port }}

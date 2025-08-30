@@ -1,0 +1,24 @@
+replicaCount: 2
+
+app:
+  name: app
+  replicaCount: 2
+  image: yoyox2003/bm-grad-app:latest
+  port: 5002
+  serviceType: LoadBalancer
+
+api:
+  name: api
+  replicaCount: 2
+  image: yoyox2003/bm-grad_api:latest
+  port: 5001
+  serviceType: ClusterIP
+
+database:
+  name: database
+  replicaCount: 1
+  image: yoyox2003/bm-grad-db:latest
+  port: 3306
+  serviceType: ClusterIP
+  secretName: database-secrets
+  initScriptConfigMap: database-init-script

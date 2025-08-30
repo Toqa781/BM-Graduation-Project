@@ -6,60 +6,45 @@ variable "region" {
 variable "vpc_cidr" {
   description = "CIDR block for the VPC"
   type        = string
-  default     = "10.0.0.0/16"
 }
 
-variable "azs" {
-  description = "List of availability zones to use"
+variable "private_subnets" {
+  description = "Private subnet CIDR blocks"
   type        = list(string)
-  default     = []
+}
+
+variable "public_subnets" {
+  description = "Public subnet CIDR blocks"
+  type        = list(string)
 }
 
 variable "cluster_name" {
-  description = "EKS cluster name"
+  description = "The name of the EKS cluster"
   type        = string
-  default     = "stage-eks-cluster"
 }
 
-variable "kubernetes_version" {
-  description = "Kubernetes version for EKS"
+variable "node_instance_type" {
+  description = "The instance type for the EKS nodes"
   type        = string
-  default     = "1.29"
 }
 
 variable "node_desired_capacity" {
-  description = "Desired number of worker nodes"
+  description = "The desired number of worker nodes"
   type        = number
-  default     = 2
-}
-
-variable "node_min_capacity" {
-  description = "Minimum number of worker nodes"
-  type        = number
-  default     = 1
 }
 
 variable "node_max_capacity" {
-  description = "Maximum number of worker nodes"
+  description = "The maximum number of worker nodes"
   type        = number
-  default     = 3
 }
 
-variable "node_instance_types" {
-  description = "EC2 instance types for node group"
-  type        = list(string)
-  default     = ["t2.small"]
-}
-
-variable "create_key_pair" {
-  description = "Whether to create a key pair for SSH access to nodes"
-  type        = bool
-  default     = true
+variable "node_min_capacity" {
+  description = "The minimum number of worker nodes"
+  type        = number
 }
 
 variable "public_key_path" {
-  description = "Path to an existing public key file (used if create_key_pair = true)"
+  description = "Path to your public SSH key"
   type        = string
-  default     = "id_rsa.pub"
+  default     = "id_rsa.pub" # Relative path to the key file
 }
-

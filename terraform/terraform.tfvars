@@ -1,19 +1,9 @@
-# Region and AZs
-region = "us-west-2"
-azs    = ["us-west-2a", "us-west-2b"]
-
-# Networking
-vpc_cidr = "10.0.0.0/16"
-
-# EKS
-cluster_name         = "stage-eks-cluster"
-kubernetes_version   = "1.29"
+region              = "us-west-2"
+vpc_cidr            = "10.0.0.0/16"
+private_subnets     = ["10.0.1.0/24", "10.0.2.0/24"]
+public_subnets      = ["10.0.3.0/24", "10.0.4.0/24"]
+cluster_name        = "stage-eks-cluster"
+node_instance_type  = "t3.micro"
 node_desired_capacity = 2
-node_min_capacity     = 1
-node_max_capacity     = 3
-node_instance_types   = ["t2.small"]
-
-# Key pair
-create_key_pair  = true
-public_key_path  = "id_rsa.pub"
-
+node_max_capacity   = 3
+node_min_capacity   = 1

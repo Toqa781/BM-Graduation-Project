@@ -69,6 +69,8 @@ module "eks" {
       instance_types = var.node_instance_types
       capacity_type  = "ON_DEMAND"
 
+      use_custom_launch_template = false   # 🔑 ده اللي بيشيل الـ template
+
       remote_access = var.create_key_pair ? {
         ec2_ssh_key               = aws_key_pair.this[0].key_name
         source_security_group_ids = [aws_security_group.node_ssh_sg.id]

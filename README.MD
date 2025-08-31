@@ -11,6 +11,7 @@ This application follows a 3-tier architecture pattern:
 3. **Database Layer (db/)** - MySQL database for data persistence
 
 The application is containerized, orchestrated with Kubernetes, and deployed on AWS EKS with complete infrastructure automation.
+![Archeticture Diagram](./Arch_Diagram.png)
 
 ## 🛠️ Technologies Stack
 

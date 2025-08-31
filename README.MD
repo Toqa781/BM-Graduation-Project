@@ -251,4 +251,6 @@ http://<LoadBalancer-External-IP>:5002
    - Database connections should work
 
 
+
+
 **🎉 Congratulations!** You have successfully deployed a production-ready 3-tier web application on AWS EKS with complete DevOps automation!
